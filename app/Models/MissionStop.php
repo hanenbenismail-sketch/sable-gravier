@@ -15,6 +15,7 @@ class MissionStop extends Model
         'client_id',
         'product_id',
         'quantity',
+        'delivered_quantity',
         'unit',
         'distance_from_previous',
         'loading_status',
@@ -26,6 +27,7 @@ class MissionStop extends Model
 
     protected $casts = [
         'quantity' => 'decimal:3',
+        'delivered_quantity' => 'decimal:3',
         'distance_from_previous' => 'decimal:3',
         'arrival_time' => 'datetime',
         'departure_time' => 'datetime',

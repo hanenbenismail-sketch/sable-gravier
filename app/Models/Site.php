@@ -17,7 +17,17 @@ class Site extends Model
         'longitude',
         'status',
         'description',
+        'tracks_stock',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'tracks_stock' => 'boolean',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
+        ];
+    }
 
     public function stocks(): HasMany
     {

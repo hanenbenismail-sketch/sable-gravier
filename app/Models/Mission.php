@@ -13,6 +13,8 @@ class Mission extends Model
         'truck_id',
         'driver_id',
         'departure_site_id',
+        'return_site_id',
+        'returned_quantity',
         'mission_date',
         'departure_time',
         'return_time',
@@ -34,6 +36,7 @@ class Mission extends Model
         'mission_date' => 'date',
         'departure_time' => 'datetime',
         'return_time' => 'datetime',
+        'returned_quantity' => 'decimal:3',
         'total_distance' => 'decimal:3',
         'total_quantity' => 'decimal:3',
         'transport_cost' => 'decimal:3',
@@ -58,6 +61,11 @@ class Mission extends Model
     public function departureSite(): BelongsTo
     {
         return $this->belongsTo(Site::class, 'departure_site_id');
+    }
+
+    public function returnSite(): BelongsTo
+    {
+        return $this->belongsTo(Site::class, 'return_site_id');
     }
 
     public function stops(): HasMany

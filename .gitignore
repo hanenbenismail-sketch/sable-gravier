@@ -33,3 +33,11 @@ Thumbs.db
 *.backup.php
 *.before-stock.php
 *.bak
+
+# Temporary repair files and local backups
+MissionService.php
+app/Services/MissionService*.backup*
+app/Services/MissionService*.before*
+app/Services/MissionService*.repaired_candidate.php
+database/migrations/*.backup
+tests/Feature/*.backup

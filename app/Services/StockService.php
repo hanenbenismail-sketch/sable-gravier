@@ -48,9 +48,9 @@ class StockService
 
             $stock = Stock::lockForUpdate()->findOrFail($stock->id);
 
-            $stock->quantity += $quantity;
+            $stock->quantity = (float) $stock->quantity + $quantity;
             $stock->available_quantity =
-                $stock->quantity - $stock->reserved_quantity;
+                (float) $stock->quantity - (float) $stock->reserved_quantity;
             $stock->last_updated = now();
             $stock->save();
 
@@ -107,9 +107,9 @@ class StockService
                 );
             }
 
-            $stock->quantity -= $quantity;
+            $stock->quantity = (float) $stock->quantity - $quantity;
             $stock->available_quantity =
-                $stock->quantity - $stock->reserved_quantity;
+                (float) $stock->quantity - (float) $stock->reserved_quantity;
             $stock->last_updated = now();
             $stock->save();
 
@@ -125,6 +125,61 @@ class StockService
                 'note' => $note,
             ]);
 
+            return $stock->fresh();
+        });
+    }
+
+    public function returnStock(
+        int $siteId,
+        int $productId,
+        float $quantity,
+        int $missionId,
+        ?int $userId = null
+    ): Stock {
+        if (!is_finite($quantity) || $quantity <= 0) {
+            throw new InvalidArgumentException(
+                'La quantité retournée doit être supérieure à zéro.'
+            );
+        }
+
+        return DB::transaction(function () use (
+            $siteId,
+            $productId,
+            $quantity,
+            $missionId,
+            $userId
+        ) {
+            $stock = Stock::firstOrCreate(
+                [
+                    'site_id' => $siteId,
+                    'product_id' => $productId,
+                ],
+                [
+                    'quantity' => 0,
+                    'reserved_quantity' => 0,
+                    'available_quantity' => 0,
+                    'last_updated' => now(),
+                ]
+            );
+            $stock = Stock::whereKey($stock->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $stock->quantity = (float) $stock->quantity + $quantity;
+            $stock->available_quantity =
+                (float) $stock->quantity - (float) $stock->reserved_quantity;
+            $stock->last_updated = now();
+            $stock->save();
+            StockMovement::create([
+                'stock_id' => $stock->id,
+                'type' => 'RETURN',
+                'quantity' => $quantity,
+                'reference_type' => 'mission_return',
+                'reference_id' => $missionId,
+                'to_site_id' => $siteId,
+                'movement_date' => now(),
+                'user_id' => $userId,
+               'note' => 'Retour de marchandise - Mission #' . $missionId,
+            ]);
             return $stock->fresh();
         });
     }

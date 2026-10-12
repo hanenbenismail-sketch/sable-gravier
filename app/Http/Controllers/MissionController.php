@@ -74,91 +74,28 @@ class MissionController extends Controller
                 'max:255',
                 'unique:missions,reference',
             ],
-            'truck_id' => [
-                'required',
-                'integer',
-                'exists:trucks,id',
-            ],
-            'driver_id' => [
-                'required',
-                'integer',
-                'exists:drivers,id',
-            ],
-            'departure_site_id' => [
-                'required',
-                'integer',
-                'exists:sites,id',
-            ],
-            'mission_date' => [
-                'required',
-                'date',
-            ],
-            'departure_time' => [
-                'nullable',
-                'date',
-            ],
+            'truck_id' => ['required', 'integer', 'exists:trucks,id'],
+            'driver_id' => ['required', 'integer', 'exists:drivers,id'],
+            'departure_site_id' => ['required', 'integer', 'exists:sites,id'],
+            'mission_date' => ['required', 'date'],
+            'departure_time' => ['nullable', 'date'],
             'mission_type' => [
                 'required',
-                Rule::in([
-                    'delivery',
-                    'transfer',
-                    'return',
-                    'mixed',
-                ]),
+                Rule::in(['delivery', 'transfer', 'return', 'mixed']),
             ],
             'status' => [
                 'required',
-                Rule::in([
-                    'planned',
-                    'in_progress',
-                    'completed',
-                    'cancelled',
-                ]),
+                Rule::in(['planned', 'in_progress', 'completed', 'cancelled']),
             ],
-            'total_distance' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'total_quantity' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'transport_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'fuel_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'driver_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'other_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'total_revenue' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'notes' => [
-                'nullable',
-                'string',
-            ],
-            'stops' => [
-                'nullable',
-                'array',
-                'max:30',
-            ],
+            'total_distance' => ['nullable', 'numeric', 'min:0'],
+            'total_quantity' => ['nullable', 'numeric', 'min:0'],
+            'transport_cost' => ['nullable', 'numeric', 'min:0'],
+            'fuel_cost' => ['nullable', 'numeric', 'min:0'],
+            'driver_cost' => ['nullable', 'numeric', 'min:0'],
+            'other_cost' => ['nullable', 'numeric', 'min:0'],
+            'total_revenue' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string'],
+            'stops' => ['nullable', 'array', 'max:30'],
             'stops.*.stop_type' => [
                 'required',
                 Rule::in([
@@ -185,30 +122,35 @@ class MissionController extends Controller
                 'exists:products,id',
             ],
             'stops.*.quantity' => [
-                'required',
+                'nullable',
                 'numeric',
-                'gt:0',
+                'min:0',
                 'max:999999999',
+                'regex:/^\d+(\.\d{1,3})?$/',
             ],
-            'stops.*.unit' => [
-                'required',
-                'string',
-                'max:50',
-            ],
+            'stops.*.unit' => ['required', 'string', 'max:50'],
             'stops.*.distance_from_previous' => [
                 'nullable',
                 'numeric',
                 'min:0',
             ],
-            'stops.*.notes' => [
-                'nullable',
-                'string',
-            ],
+            'stops.*.notes' => ['nullable', 'string'],
         ]);
 
         $stops = $validated['stops'] ?? [];
 
         foreach ($stops as $index => $stop) {
+            $quantity = $stop['quantity'] ?? 0;
+
+            if ($stop['stop_type'] === 'loading') {
+                $stops[$index]['quantity'] = (float) $quantity;
+            } elseif (!is_numeric($quantity) || (float) $quantity <= 0) {
+                throw ValidationException::withMessages([
+                    "stops.$index.quantity" =>
+                        'La quantité doit être supérieure à zéro pour cet arrêt.',
+                ]);
+            }
+
             if (
                 $stop['stop_type'] === 'loading'
                 && empty($stop['site_id'])
@@ -240,29 +182,24 @@ class MissionController extends Controller
             $missionService
         ) {
             $mission = new Mission(
-                collect($validated)->except('stops')->all()
+                collect($validated)->except([
+                    'stops',
+                    'departure_time',
+                    'status',
+                ])->all()
             );
 
-            $mission->total_distance =
-                $validated['total_distance'] ?? 0;
+            $mission->status = 'planned';
+            $mission->departure_time = null;
+            $mission->return_time = null;
 
-            $mission->total_quantity =
-                $validated['total_quantity'] ?? 0;
-
-            $mission->transport_cost =
-                $validated['transport_cost'] ?? 0;
-
-            $mission->fuel_cost =
-                $validated['fuel_cost'] ?? 0;
-
-            $mission->driver_cost =
-                $validated['driver_cost'] ?? 0;
-
-            $mission->other_cost =
-                $validated['other_cost'] ?? 0;
-
-            $mission->total_revenue =
-                $validated['total_revenue'] ?? 0;
+            $mission->total_distance = $validated['total_distance'] ?? 0;
+            $mission->total_quantity = $validated['total_quantity'] ?? 0;
+            $mission->transport_cost = $validated['transport_cost'] ?? 0;
+            $mission->fuel_cost = $validated['fuel_cost'] ?? 0;
+            $mission->driver_cost = $validated['driver_cost'] ?? 0;
+            $mission->other_cost = $validated['other_cost'] ?? 0;
+            $mission->total_revenue = $validated['total_revenue'] ?? 0;
 
             $mission->total_cost =
                 (float) $mission->transport_cost
@@ -297,7 +234,8 @@ class MissionController extends Controller
                     'site_id' => $stopData['site_id'] ?? null,
                     'client_id' => $stopData['client_id'] ?? null,
                     'product_id' => $stopData['product_id'] ?? null,
-                    'quantity' => $stopData['quantity'],
+                    'quantity' => $stopData['quantity'] ?? 0,
+                    'delivered_quantity' => 0,
                     'unit' => $stopData['unit'],
                     'distance_from_previous' =>
                         $stopData['distance_from_previous'] ?? 0,
@@ -321,12 +259,34 @@ class MissionController extends Controller
             'driver',
             'truck',
             'departureSite',
+            'returnSite',
             'stops.site',
             'stops.client',
             'stops.product',
         ]);
 
-        return view('missions.show', compact('mission'));
+        $sites = Site::where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        return view('missions.show', compact('mission', 'sites'));
+    }
+
+    public function start(
+        Mission $mission,
+        MissionService $missionService
+    ) {
+        try {
+            $missionService->startMission($mission);
+        } catch (InvalidArgumentException $exception) {
+            return redirect()
+                ->route('missions.show', $mission)
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('missions.show', $mission)
+            ->with('success', 'Mission démarrée avec succès.');
     }
 
     public function edit(Mission $mission)
@@ -360,120 +320,45 @@ class MissionController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('missions', 'reference')
-                    ->ignore($mission->id),
+                Rule::unique('missions', 'reference')->ignore($mission->id),
             ],
-            'truck_id' => [
-                'required',
-                'integer',
-                'exists:trucks,id',
-            ],
-            'driver_id' => [
-                'required',
-                'integer',
-                'exists:drivers,id',
-            ],
-            'departure_site_id' => [
-                'required',
-                'integer',
-                'exists:sites,id',
-            ],
-            'mission_date' => [
-                'required',
-                'date',
-            ],
-            'departure_time' => [
-                'nullable',
-                'date',
-            ],
+            'truck_id' => ['required', 'integer', 'exists:trucks,id'],
+            'driver_id' => ['required', 'integer', 'exists:drivers,id'],
+            'departure_site_id' => ['required', 'integer', 'exists:sites,id'],
+            'mission_date' => ['required', 'date'],
+            'departure_time' => ['nullable', 'date'],
             'mission_type' => [
                 'required',
-                Rule::in([
-                    'delivery',
-                    'transfer',
-                    'return',
-                    'mixed',
-                ]),
+                Rule::in(['delivery', 'transfer', 'return', 'mixed']),
             ],
             'status' => [
                 'required',
-                Rule::in([
-                    'planned',
-                    'in_progress',
-                    'completed',
-                    'cancelled',
-                ]),
+                Rule::in(['planned', 'in_progress', 'completed', 'cancelled']),
             ],
-            'total_distance' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'total_quantity' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'transport_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'fuel_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'driver_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'other_cost' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'total_revenue' => [
-                'nullable',
-                'numeric',
-                'min:0',
-            ],
-            'notes' => [
-                'nullable',
-                'string',
-            ],
+            'total_distance' => ['nullable', 'numeric', 'min:0'],
+            'total_quantity' => ['nullable', 'numeric', 'min:0'],
+            'transport_cost' => ['nullable', 'numeric', 'min:0'],
+            'fuel_cost' => ['nullable', 'numeric', 'min:0'],
+            'driver_cost' => ['nullable', 'numeric', 'min:0'],
+            'other_cost' => ['nullable', 'numeric', 'min:0'],
+            'total_revenue' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string'],
         ]);
+
+        unset($validated['status'], $validated['departure_time']);
 
         $mission->fill($validated);
 
-        $mission->total_distance =
-            $validated['total_distance'] ?? 0;
+        $mission->total_distance = $validated['total_distance'] ?? 0;
+        $mission->total_quantity = $validated['total_quantity'] ?? 0;
+        $mission->transport_cost = $validated['transport_cost'] ?? 0;
+        $mission->fuel_cost = $validated['fuel_cost'] ?? 0;
+        $mission->driver_cost = $validated['driver_cost'] ?? 0;
+        $mission->other_cost = $validated['other_cost'] ?? 0;
+        $mission->total_revenue = $validated['total_revenue'] ?? 0;
 
-        $mission->total_quantity =
-            $validated['total_quantity'] ?? 0;
-
-        $mission->transport_cost =
-            $validated['transport_cost'] ?? 0;
-
-        $mission->fuel_cost =
-            $validated['fuel_cost'] ?? 0;
-
-        $mission->driver_cost =
-            $validated['driver_cost'] ?? 0;
-
-        $mission->other_cost =
-            $validated['other_cost'] ?? 0;
-
-        $mission->total_revenue =
-            $validated['total_revenue'] ?? 0;
-
-        DB::transaction(function () use (
-            $mission,
-            $missionService
-        ) {
+        DB::transaction(function () use ($mission, $missionService) {
             $mission->save();
-
             $missionService->calculateCosts($mission);
         });
 
@@ -483,6 +368,7 @@ class MissionController extends Controller
     }
 
     public function loadStop(
+        Request $request,
         Mission $mission,
         MissionStop $stop,
         MissionService $missionService
@@ -491,11 +377,116 @@ class MissionController extends Controller
             abort(404);
         }
 
+        $validated = $request->validate([
+            'quantity' => [
+                'required',
+                'numeric',
+                'gt:0',
+                'max:999999999',
+                'regex:/^\d+(\.\d{1,3})?$/',
+            ],
+        ]);
+
         try {
             $missionService->loadMissionStop(
                 $stop,
+                (float) $validated['quantity'],
                 Auth::id()
             );
+        } catch (InvalidArgumentException $exception) {
+            return redirect()
+                ->route('missions.show', $mission)
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('missions.show', $mission)
+            ->with('success', 'Chargement effectué avec succès.');
+    }
+
+    public function deliverStop(
+        Request $request,
+        Mission $mission,
+        MissionStop $stop,
+        MissionService $missionService
+    ) {
+        if ((int) $stop->mission_id !== (int) $mission->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'delivered_quantity' => [
+                'required',
+                'numeric',
+                'gt:0',
+                'max:999999999',
+                'regex:/^\d+(\.\d{1,3})?$/',
+            ],
+        ]);
+
+        try {
+            $missionService->deliverMissionStop(
+                $stop,
+                (float) $validated['delivered_quantity']
+            );
+        } catch (InvalidArgumentException $exception) {
+            return redirect()
+                ->route('missions.show', $mission)
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('missions.show', $mission)
+            ->with('success', 'Quantité livrée enregistrée avec succès.');
+    }
+
+    public function returnStock(
+        Request $request,
+        Mission $mission,
+        MissionService $missionService
+    ) {
+        $validated = $request->validate([
+            'return_site_id' => [
+                'required',
+                'integer',
+                'exists:sites,id',
+            ],
+            'returned_quantity' => [
+                'required',
+                'numeric',
+                'gt:0',
+                'max:999999999',
+                'regex:/^\d+(\.\d{1,3})?$/',
+            ],
+        ]);
+
+        try {
+            $missionService->returnMissionStock(
+                $mission,
+                (int) $validated['return_site_id'],
+                (float) $validated['returned_quantity'],
+                Auth::id()
+            );
+        } catch (InvalidArgumentException $exception) {
+            return redirect()
+                ->route('missions.show', $mission)
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('missions.show', $mission)
+            ->with('success', 'Retour de marchandise enregistré avec succès.');
+    }
+
+    public function complete(
+        Mission $mission,
+        MissionService $missionService
+    ) {
+        try {
+            $missionService->completeMission($mission);
         } catch (InvalidArgumentException $exception) {
             return redirect()
                 ->route('missions.show', $mission)
@@ -504,7 +495,7 @@ class MissionController extends Controller
 
         return redirect()
             ->route('missions.show', $mission)
-            ->with('success', 'Chargement effectué avec succès.');
+            ->with('success', 'Mission terminée avec succès.');
     }
 
     public function destroy(Mission $mission)

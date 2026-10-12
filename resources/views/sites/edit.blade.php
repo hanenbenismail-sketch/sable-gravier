@@ -6,6 +6,7 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3">Modifier un site</h1>
+
         <a href="{{ route('sites.index') }}" class="btn btn-secondary">
             Retour aux sites
         </a>
@@ -34,11 +35,18 @@
 
                 <div class="mb-3">
                     <label for="type" class="form-label">Type de site</label>
-                    <select id="type" name="type" class="form-select @error('type') is-invalid @enderror" required>
-                        <option value="carriere" {{ old('type', $site->type) === 'carriere' ? 'selected' : '' }}>
+                    <select
+                        id="type"
+                        name="type"
+                        class="form-select @error('type') is-invalid @enderror"
+                        required
+                    >
+                        <option value="carriere"
+                            {{ old('type', $site->type) === 'carriere' ? 'selected' : '' }}>
                             Carrière
                         </option>
-                        <option value="depot" {{ old('type', $site->type) === 'depot' ? 'selected' : '' }}>
+                        <option value="depot"
+                            {{ old('type', $site->type) === 'depot' ? 'selected' : '' }}>
                             Dépôt
                         </option>
                     </select>
@@ -95,17 +103,60 @@
 
                 <div class="mb-3">
                     <label for="status" class="form-label">Statut</label>
-                    <select id="status" name="status" class="form-select @error('status') is-invalid @enderror" required>
-                        <option value="active" {{ old('status', $site->status) === 'active' ? 'selected' : '' }}>
+                    <select
+                        id="status"
+                        name="status"
+                        class="form-select @error('status') is-invalid @enderror"
+                        required
+                    >
+                        <option value="active"
+                            {{ old('status', $site->status) === 'active' ? 'selected' : '' }}>
                             Actif
                         </option>
-                        <option value="inactive" {{ old('status', $site->status) === 'inactive' ? 'selected' : '' }}>
+                        <option value="inactive"
+                            {{ old('status', $site->status) === 'inactive' ? 'selected' : '' }}>
                             Inactif
                         </option>
                     </select>
                     @error('status')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="tracks_stock" class="form-label">
+                        Gestion du stock
+                    </label>
+
+                    <select
+                        id="tracks_stock"
+                        name="tracks_stock"
+                        class="form-select @error('tracks_stock') is-invalid @enderror"
+                        required
+                    >
+                        <option
+                            value="1"
+                            {{ (string) old('tracks_stock', (int) $site->tracks_stock) === '1' ? 'selected' : '' }}
+                        >
+                            Oui — ce site gère le stock
+                        </option>
+
+                        <option
+                            value="0"
+                            {{ (string) old('tracks_stock', (int) $site->tracks_stock) === '0' ? 'selected' : '' }}
+                        >
+                            Non — chargement externe, sans stock suivi
+                        </option>
+                    </select>
+
+                    @error('tracks_stock')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+
+                    <div class="form-text">
+                        Choisir Oui uniquement si les quantités de ce site
+                        doivent être suivies dans le logiciel.
+                    </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary">

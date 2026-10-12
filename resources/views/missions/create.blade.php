@@ -383,6 +383,21 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function updateQuantityRequirement(stop) {
+        const typeField = stop.querySelector('[data-field="stop_type"]');
+        const quantityField = stop.querySelector('[data-field="quantity"]');
+        const isLoading = typeField.value === 'loading';
+
+        quantityField.required = !isLoading;
+        quantityField.min = isLoading ? '0' : '0.001';
+
+        if (isLoading && quantityField.value === '') {
+            quantityField.value = '0';
+        } else if (!isLoading && Number(quantityField.value) <= 0) {
+            quantityField.value = '';
+        }
+    }
+
     function addStop() {
         const count = container.querySelectorAll('.mission-stop').length;
 
@@ -403,8 +418,14 @@ document.addEventListener('DOMContentLoaded', function () {
             reindexStops();
         });
 
+        stop.querySelector('[data-field="stop_type"]')
+            .addEventListener('change', function () {
+                updateQuantityRequirement(stop);
+            });
+
         container.appendChild(fragment);
         reindexStops();
+        updateQuantityRequirement(stop);
     }
 
     addButton.addEventListener('click', addStop);

@@ -28,7 +28,10 @@ class SiteController extends Controller
             'delegation' => 'required|string|max:100',
             'address' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
+            'tracks_stock' => 'required|boolean',
         ]);
+
+        $validated['tracks_stock'] = (bool) $validated['tracks_stock'];
 
         Site::create($validated);
 
@@ -60,7 +63,10 @@ class SiteController extends Controller
             'delegation' => 'required|string|max:100',
             'address' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
+            'tracks_stock' => 'required|boolean',
         ]);
+
+        $validated['tracks_stock'] = (bool) $validated['tracks_stock'];
 
         $site->update($validated);
 

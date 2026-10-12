@@ -11,7 +11,6 @@ class MaintenanceService
     public function createMaintenance(array $data): Maintenance
     {
         return DB::transaction(function () use ($data) {
-
             $truckId = $data['truck_id'] ?? null;
             $cost = (float) ($data['cost'] ?? 0);
 
@@ -21,9 +20,8 @@ class MaintenanceService
                 );
             }
 
-            if (empty($data['maintenance_date'])) {
-                $data['maintenance_date'] = now()->toDateString();
-            }
+            $maintenanceDate = $data['maintenance_date']
+                ?? now()->toDateString();
 
             if (empty($data['type'])) {
                 throw new InvalidArgumentException(
@@ -43,9 +41,17 @@ class MaintenanceService
                 );
             }
 
+            $status = $data['status'] ?? 'completed';
+
+            if (!in_array($status, ['planned', 'in_progress', 'completed', 'cancelled'], true)) {
+                throw new InvalidArgumentException(
+                    'Le statut de maintenance est invalide.'
+                );
+            }
+
             return Maintenance::create([
                 'truck_id' => $truckId,
-                'maintenance_date' => $data['maintenance_date'],
+                'maintenance_date' => $maintenanceDate,
                 'type' => $data['type'],
                 'description' => $data['description'],
                 'current_kilometer' => $data['current_kilometer'] ?? null,
@@ -53,7 +59,7 @@ class MaintenanceService
                 'cost' => $cost,
                 'next_maintenance_date' => $data['next_maintenance_date'] ?? null,
                 'next_maintenance_kilometer' => $data['next_maintenance_kilometer'] ?? null,
-                'status' => $data['status'] ?? 'completed',
+                'status' => $status,
                 'reference' => $data['reference'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);

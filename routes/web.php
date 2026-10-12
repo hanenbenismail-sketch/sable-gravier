@@ -33,10 +33,35 @@ Route::resource('clients', ClientController::class);
 Route::resource('trucks', TruckController::class);
 Route::resource('drivers', DriverController::class);
 
+// Démarrer une mission.
+Route::post(
+    'missions/{mission}/start',
+    [MissionController::class, 'start']
+)->name('missions.start');
+
 // Charger un arrêt de mission.
 Route::post(
     'missions/{mission}/stops/{stop}/load',
     [MissionController::class, 'loadStop']
 )->name('missions.stops.load');
 
+// Enregistrer une livraison partielle ou complète.
+Route::post(
+    'missions/{mission}/stops/{stop}/deliver',
+    [MissionController::class, 'deliverStop']
+)->name('missions.stops.deliver');
+
+// Retourner la marchandise au stock.
+Route::post(
+    'missions/{mission}/return',
+    [MissionController::class, 'returnStock']
+)->name('missions.return');
+
+// Terminer une mission.
+Route::post(
+    'missions/{mission}/complete',
+    [MissionController::class, 'complete']
+)->name('missions.complete');
+
+// Routes CRUD des missions.
 Route::resource('missions', MissionController::class);
