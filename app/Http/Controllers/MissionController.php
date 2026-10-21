@@ -186,6 +186,7 @@ class MissionController extends Controller
                     'stops',
                     'departure_time',
                     'status',
+                    'total_quantity',
                 ])->all()
             );
 
@@ -194,7 +195,12 @@ class MissionController extends Controller
             $mission->return_time = null;
 
             $mission->total_distance = $validated['total_distance'] ?? 0;
-            $mission->total_quantity = $validated['total_quantity'] ?? 0;
+            $mission->total_quantity = round(
+                collect($stops)
+                    ->where('stop_type', 'delivery')
+                    ->sum(fn (array $stop) => (float) ($stop['quantity'] ?? 0)),
+                3
+            );
             $mission->transport_cost = $validated['transport_cost'] ?? 0;
             $mission->fuel_cost = $validated['fuel_cost'] ?? 0;
             $mission->driver_cost = $validated['driver_cost'] ?? 0;

@@ -159,6 +159,7 @@ class MissionService
             $loadedStops = MissionStop::where('mission_id', $mission->id)
                 ->where('stop_type', 'loading')
                 ->where('loading_status', 'loaded')
+                ->where('stop_order', '<', $stop->stop_order)
                 ->get();
 
             $currentLoad = 0.0;
@@ -169,12 +170,21 @@ class MissionService
                 $currentLoad += (float) $loadedStop->quantity;
             }
 
-            $deliveredQuantity = (float) MissionStop::where(
+            $deliveredStops = MissionStop::where(
                 'mission_id',
                 $mission->id
             )
                 ->whereIn('stop_type', ['delivery', 'unloading'])
-                ->sum('delivered_quantity');
+                ->where('stop_order', '<', $stop->stop_order)
+                ->get();
+
+            $deliveredQuantity = 0.0;
+
+            foreach ($deliveredStops as $deliveredStop) {
+                $this->ensureSameUnit($truck->unit, $deliveredStop->unit);
+
+                $deliveredQuantity += (float) $deliveredStop->delivered_quantity;
+            }
 
             $currentLoad = max($currentLoad - $deliveredQuantity, 0);
 
@@ -275,19 +285,21 @@ class MissionService
                 ->where('stop_type', 'loading')
                 ->where('loading_status', 'loaded')
                 ->where('product_id', $stop->product_id)
+                ->where('stop_order', '<', $stop->stop_order)
                 ->sum('quantity');
 
-            $deliveredForProduct = (float) MissionStop::where(
+            $deliveredBeforeStop = (float) MissionStop::where(
                 'mission_id',
                 $mission->id
             )
                 ->whereIn('stop_type', ['delivery', 'unloading'])
                 ->where('product_id', $stop->product_id)
+                ->where('stop_order', '<', $stop->stop_order)
                 ->sum('delivered_quantity');
 
             if (
                 $loadedForProduct <= 0
-                || $deliveredForProduct + $deliveredQuantity
+                || $deliveredBeforeStop + $alreadyDelivered + $deliveredQuantity
                     > $loadedForProduct + self::EPSILON
             ) {
                 throw new InvalidArgumentException(
@@ -485,6 +497,22 @@ class MissionService
 
             // Préserver les missions historiques sans arrêts de chargement.
             if ($loadingStops->isNotEmpty()) {
+                // Bloquer la clôture si une livraison est en attente ou partielle.
+                $unfinishedDelivery = MissionStop::where(
+                    'mission_id',
+                    $mission->id
+                )
+                    ->whereIn('stop_type', ['delivery', 'unloading'])
+                    ->whereIn('delivery_status', ['pending', 'partial'])
+                    ->exists();
+
+                if ($unfinishedDelivery) {
+                    throw new InvalidArgumentException(
+                        'Impossible de terminer : toutes les livraisons doivent être terminées.'
+                    );
+                }
+
+                // Tous les chargements doivent être confirmés.
                 if (
                     $loadingStops->contains(
                         fn ($stop) => $stop->loading_status !== 'loaded'
@@ -516,6 +544,17 @@ class MissionService
                 }
 
                 if ($returnedQuantity > 0) {
+                    if (
+                        abs(
+                            round((float) $returnMovement->quantity, 3)
+                            - round($returnedQuantity, 3)
+                        ) >= self::EPSILON
+                    ) {
+                        throw new InvalidArgumentException(
+                            'La quantité du mouvement de retour ne correspond pas à celle de la mission.'
+                        );
+                    }
+
                     if (!$mission->return_site_id) {
                         throw new InvalidArgumentException(
                             'Le site de retour doit être renseigné.'
@@ -594,6 +633,7 @@ class MissionService
 
                     foreach ($deliveryStops as $deliveryStop) {
                         $this->ensureSameUnit($product->unit, $deliveryStop->unit);
+
                         $deliveredQuantity += (float) $deliveryStop->delivered_quantity;
                     }
 
@@ -616,7 +656,10 @@ class MissionService
                     }
                 }
 
-                if ($returnedProductId !== null && !isset($loadedByProduct[$returnedProductId])) {
+                if (
+                    $returnedProductId !== null
+                    && !isset($loadedByProduct[$returnedProductId])
+                ) {
                     throw new InvalidArgumentException(
                         'Le produit retourné ne correspond à aucun chargement de cette mission.'
                     );
