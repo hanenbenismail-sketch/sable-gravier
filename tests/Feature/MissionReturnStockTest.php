@@ -11,6 +11,7 @@ use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\Truck;
 use App\Services\MissionService;
+use InvalidArgumentException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -134,6 +135,25 @@ class MissionReturnStockTest extends TestCase
         $this->assertEquals($destination->id, $returnMovement->to_site_id);
         $this->assertEquals($destination->id, $returnedMission->return_site_id);
         $this->assertEquals(4, (float) $returnedMission->returned_quantity);
+
+        // Un deuxième retour pour la même mission doit être refusé.
+        try {
+            $service->returnMissionStock($returnedMission, $destination->id, 4);
+            $this->fail('Un deuxième retour de stock aurait dû être refusé.');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('retour de marchandise', $e->getMessage());
+        }
+
+        // Vérifier qu'aucun stock ni mouvement supplémentaire n'a été ajouté.
+        $destinationStock->refresh();
+        $this->assertEquals(4, (float) $destinationStock->quantity);
+        $this->assertSame(
+            1,
+            StockMovement::where('reference_type', 'mission_return')
+                ->where('reference_id', $mission->id)
+                ->where('type', 'RETURN')
+                ->count()
+        );
 
         // Vérifier que la mission se termine après le retour du stock.
         $completedMission = $service->completeMission($returnedMission);
