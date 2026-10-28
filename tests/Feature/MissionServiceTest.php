@@ -8,6 +8,7 @@ use App\Models\MissionStop;
 use App\Models\Product;
 use App\Models\Site;
 use App\Models\Truck;
+use App\Models\Stock;
 use App\Services\MissionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
@@ -252,4 +253,88 @@ class MissionServiceTest extends TestCase
                 ->count()
         );
     }
+
+    public function test_planned_mission_can_be_cancelled(): void
+    {
+        [$site, $mission] = $this->createMissionFixture(
+            'TEST-CANCEL-PLANNED-' . uniqid()
+        );
+
+        $response = $this->post(route('missions.cancel', $mission));
+
+        $response->assertRedirect(route('missions.show', $mission));
+        $response->assertSessionHas('success');
+        $this->assertSame('cancelled', $mission->fresh()->status);
+    }
+
+    public function test_in_progress_mission_cannot_be_cancelled(): void
+    {
+        [$site, $mission] = $this->createMissionFixture(
+            'TEST-CANCEL-PROGRESS-' . uniqid()
+        );
+
+        $mission->update(['status' => 'in_progress']);
+
+        $response = $this->post(route('missions.cancel', $mission));
+
+        $response->assertRedirect(route('missions.show', $mission));
+        $response->assertSessionHas('error');
+        $this->assertSame('in_progress', $mission->fresh()->status);
+    }
+
+    public function test_mission_with_stock_out_movement_cannot_be_cancelled(): void
+    {
+        [$site, $mission] = $this->createMissionFixture(
+            'TEST-CANCEL-STOCK-' . uniqid()
+        );
+
+        $stop = MissionStop::create([
+            'mission_id' => $mission->id,
+            'stop_order' => 1,
+            'stop_type' => 'loading',
+            'site_id' => $site->id,
+            'quantity' => 10,
+            'unit' => 'tonne',
+            'loading_status' => 'loaded',
+        ]);
+
+        $product = Product::create([
+            'name' => 'Cancel Test Sand',
+            'code' => 'CANCEL-SAND-' . uniqid(),
+            'type' => 'sable',
+            'unit' => 'tonne',
+        ]);
+
+        $stock = \App\Models\Stock::create([
+            'site_id' => $site->id,
+            'product_id' => $product->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+            'available_quantity' => 10,
+            'last_updated' => now(),
+        ]);
+
+        $stop->update(['product_id' => $product->id]);
+
+        \Illuminate\Support\Facades\DB::table('stock_movements')->insert([
+            'stock_id' => $stock->id,
+            'type' => 'OUT',
+            'quantity' => 10,
+            'reference_type' => 'mission_stop',
+            'reference_id' => $stop->id,
+            'from_site_id' => $site->id,
+            'to_site_id' => null,
+            'movement_date' => now(),
+            'user_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->post(route('missions.cancel', $mission));
+
+        $response->assertRedirect(route('missions.show', $mission));
+        $response->assertSessionHas('error');
+        $this->assertSame('planned', $mission->fresh()->status);
+    }
+
 }

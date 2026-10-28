@@ -674,7 +674,46 @@ class MissionService
             return $mission->fresh();
         });
     }
+    public function cancelMission(Mission $mission): Mission
+    {
+        return DB::transaction(function () use ($mission) {
+            $mission = Mission::whereKey($mission->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
+            if ($mission->status !== 'planned') {
+                throw new InvalidArgumentException(
+                    'Seule une mission planifiée peut être annulée.'
+                );
+            }
+
+            $stopIds = $mission->stops()->pluck('id');
+
+            $outMovementExists = DB::table('stock_movements')
+                ->where('reference_type', 'mission_stop')
+                ->whereIn('reference_id', $stopIds)
+                ->where('type', 'OUT')
+                ->exists();
+
+            $returnMovementExists = DB::table('stock_movements')
+                ->where('reference_type', 'mission_return')
+                ->where('reference_id', $mission->id)
+                ->where('type', 'RETURN')
+                ->exists();
+
+            if ($outMovementExists || $returnMovementExists) {
+                throw new InvalidArgumentException(
+                    'Impossible d’annuler une mission ayant des mouvements de stock.'
+                );
+            }
+
+            $mission->update([
+                'status' => 'cancelled',
+            ]);
+
+            return $mission->fresh();
+        });
+    }
     private function ensureMissionActive(Mission $mission): void
     {
         if (!in_array($mission->status, ['planned', 'in_progress'], true)) {

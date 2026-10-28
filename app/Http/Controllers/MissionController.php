@@ -295,6 +295,23 @@ class MissionController extends Controller
             ->with('success', 'Mission démarrée avec succès.');
     }
 
+    public function cancel(
+        Mission $mission,
+        MissionService $missionService
+    ) {
+        try {
+            $missionService->cancelMission($mission);
+        } catch (InvalidArgumentException $exception) {
+            return redirect()
+                ->route('missions.show', $mission)
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('missions.show', $mission)
+            ->with('success', 'Mission annulée avec succès.');
+    }
+
     public function edit(Mission $mission)
     {
         $drivers = Driver::where('status', 'active')

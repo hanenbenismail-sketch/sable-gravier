@@ -39,6 +39,12 @@ Route::post(
     [MissionController::class, 'start']
 )->name('missions.start');
 
+// Annuler une mission planifiée.
+Route::post(
+    'missions/{mission}/cancel',
+    [MissionController::class, 'cancel']
+)->name('missions.cancel');
+
 // Charger un arrêt de mission.
 Route::post(
     'missions/{mission}/stops/{stop}/load',
